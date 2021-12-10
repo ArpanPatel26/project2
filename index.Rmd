@@ -46,92 +46,233 @@ class_diag <- function(score, truth, positive, cutoff=.5){
 
 # Mining, Classification, Prediction
 
-## Name and EID here
+## Arpan Patel, adp2999
 
 ### Introduction 
 
-Paragraph or two introducing your datasets and variables, why they are interesting to you, etc. See instructions for more information
+I am using the same Amazon orders dataset from Project 1. The variables within this dataset are Order Date, Order ID, Account Group, Order Quantity, Order Subtotal, Order Tax, Order Net Total, Order Net Total Above Avg, Amazon-Internal Product Category, ASIN, Title, UNSPSC, Brand, Manufacturer, Item Model Number, Seller Name, and Seller State. The Order Net Total Above Avg is a binary variable with 0 representing the net total of the order being below the average and 1 representing a net total above the average. I am interested in finding relationships among my Amazon order history. I downloaded this data directly from my Amazon account history. There are 87 observations of 17 varaibles after all the data points with NAs have been omitted. Within the binary variable, there are 61 observations with the value "0". This means there are 61 orders that have an order net total below the average order net total. On the other hand, there are 26 observations with the value "1". This means there are 26 orders that have an order net total above the average order net total.
 
 ```{R}
 library(tidyverse)
 # read your datasets in here, e.g., with read_csv()
-
+AMZM_orders <- read_csv("/stor/home/adp2999/project2/AMZM_orders.csv", 
+    col_types = cols(`Order Date` = col_date(format = "%m/%d/%Y"), 
+        `Order Quantity` = col_number(), 
+        `Order Subtotal` = col_number(), 
+        `Order Net Total Above Avg` = col_number(),
+        `Order Tax` = col_number(), `Order Net Total` = col_number()))
 # if your dataset needs tidying, do so here
+AMZM_orders <- na.omit(AMZM_orders)
 
 # any other code here
+data1 <- AMZM_orders
+below_avg <- data1 %>% filter(`Order Net Total Above Avg` == "0")
+count(below_avg)
+above_avg <- data1 %>% filter(`Order Net Total Above Avg` == "1")
+count(above_avg)
 ```
 
 ### Cluster Analysis
 
 ```{R}
 library(cluster)
+library(GGally)
 # clustering code here
+data2 <- data1%>%select(`Order Quantity`, `Order Subtotal`, `Order Tax`)
+maxsil_width <- vector()
+for (i in 2:10) {
+  kmns <- kmeans(data2, centers = i)
+  silh <- silhouette(kmns$cluster, dist(data2))
+  maxsil_width[i] <- mean(silh[,3])
+}
+ggplot()+geom_line(aes(x=1:10, y=maxsil_width))+ scale_x_continuous(name="k", breaks = 1:10)
+pam_final <- data2 %>% pam(k=2)
+pam_final$silinfo$avg.width
+pam_final
+data2 %>% mutate(cluster=as.factor(pam_final$clustering)) %>% ggpairs(cols=1:6, aes(color=cluster))
 ```
 
-Discussion of clustering here
+The average silhouette width is 0.789613. This means that  a strong structure has been found and a good fit. From the first graph, we can see that the largest avg silhouette width is at a value of k=2. This means that the number of clusters is 2. Since I am only using numbers, Euclidean is used. The two clusters are 1 (red) and 2 (blue). The red cluster has low order quantity, low order subtotal, and low order tax. Cluster 1 is Order Quantity of 1, Order Subtotal of $19.99, and Order Tax of $1.27. On the other hand, Cluster 2 is Order Quantity of 1, Order Subtotal of $358.99, and Order Tax of $22.89. This means that the blue cluster has low order quantity, high order subtotal, and high order tax. The cluster ggplots at the end show that there is lots of overlap between the clusters in terms of Order Quantity. This makes sense as almost all of the amazon orders have an order quantity of 1. Next, the order subtotal and order tax cluster graphs show very little overlap as the difference in prices between the two clusters are large. 
     
     
 ### Dimensionality Reduction with PCA
 
 ```{R}
 # PCA code here
+pca1 <- princomp(data2, cor = T)
+summary(pca1, loadings = "T")
+matrix <- pca1$scores
+matrix <- matrix %>% as.data.frame() %>% mutate(order_subtotal = data2$`Order Subtotal`)
+ggplot(matrix, aes(Comp.1, Comp.2)) + geom_point(aes(color = order_subtotal))
+cor(data2$`Order Subtotal`, matrix$Comp.1)
+cor(data2$`Order Subtotal`, matrix$Comp.2)
+cor(data2$`Order Subtotal`, matrix$Comp.3)
 ```
 
-Discussions of PCA here. 
+The pca1() data shows: First, PC1 has the highest variability of all the variables with a coefficient of 0.7029007. This makes PC1 the general strength axis. In other words, PC1 is positively correlated with all of the variables. This means that a high score on PC1 would result in a high score of all the variables and vice versa. On PC2, a high score on PC2 would result in a high score in order quantity and a low score in order subtotal and order tax, and vice versa. Lastly, on PC3 a high score on PC3 would result in a high score in order tax and a low score in order subtotal, and vice versa.
+
+The cor() data shows: Comp.1 and order subtotal are positively correlated. This means that when order subtotal increases, Comp.1 increases. The correlation between order subtotal and PC1 scores is 0.9784821. On the other hand, Comp.2 and order subtotal are slightly negatively correlated. This means that when order subtotal increases, Comp.2 decreases. The correlation between order subtotal and PC2 scores is -0.1987003. Finally, Comp.3 and order subtotal are even less slightly negatively correlated. This means that when order subtotal increases, Comp.3 decreases. The correlation between order subtotal and PC3 scores is -0.05559689. 
 
 ###  Linear Classifier
 
 ```{R}
 # linear classifier code here
+y<-data1$`Order Net Total Above Avg`
+x<-data1$`Order Net Total`
+y<- factor(y, levels=c("0","1"))
+y_hat <- ifelse(x>87, "1", "0")
+data1 %>% select(`Order Net Total`, `Order Net Total Above Avg`) %>% mutate(predict=y_hat) %>% head
+mean(y==y_hat)
+accuracy <- vector()
+cutoff <- 1:100
+for(i in cutoff){
+  y_hat <- ifelse(x>i, "1", "0")
+  accuracy[i] <- mean(y==y_hat) 
+}
+qplot(y=accuracy)+geom_line()+scale_x_continuous(breaks=80:90)
 ```
+This code predicts the binary output of the 'Order Net Total Above Avg' variable. By using the "accuracy" function, we found that the highest accuracy is when 'Order Net Total' was greater than 87. In other words, when order net total was greater than $87, the binary output would be 1. And when order net total was less than 87, the binary output would be 0. The model predicted these binary outputs with a 100% accuracy. This means that $87 is the average mean of all the order net totals in the data set. However, this linear classifier only compares one numeric variable to the binary variable. 
+
+```{R}
+# linear classifier code here
+logistic_reg <- glm(`Order Net Total Above Avg`~ `Order Quantity` + `Order Subtotal` + `Order Tax` + `Order Net Total`, data=data1, family = "binomial")
+prob_reg <- predict(logistic_reg, type = "response")
+class_diag(prob_reg, data1$`Order Net Total Above Avg`, positive="1")
+
+table(actual=y, predicted = y_hat) %>% addmargins
+
+```
+
+In this code, we integrate all numeric variables into the linear classifier. The prediction output an AUC of 1 which correlates to a perfect prediction based on the metrics I inputted. Next, I reported a confusion matrix. From the confusion matrix, we can calculate the TPR (true positive rate), Sensitivity, or the Recall. First, TP + FN is 61. This means 61 data points are actually in Category 0. Next, 61/61 equals 1. This means that the True Positive Rate is 1 and therefore, the model accurately predicts the outcome 100% of the time. 
+
 
 ```{R}
 # cross-validation of linear classifier here
+set.seed(322)
+k = 10
+data3 <- sample_frac(data1) #randomly order rows
+folds <- rep(1:k, length.out = nrow(data3)) #create folds
+diags <- NULL
+i = 1
+for (i in 1:k) {
+# create training and test sets
+train <- data3[folds != i, ]
+test <- data3[folds == i, ]
+truth <- test$`Order Net Total Above Avg`
+# train model
+fit <- glm(`Order Net Total Above Avg` == "True" ~ `Order Quantity` + `Order Subtotal` + `Order Tax` + `Order Net Total`, data = train,
+family = "binomial")
+# test model
+probs <- predict(fit, newdata = test, type = "response")
+# get performance metrics for each fold
+diags <- rbind(diags, class_diag(probs, truth, positive = "True"))
+}
+# average performance metrics across all folds
+summarize_all(diags, mean)
+
 ```
 
-Discussion here
+The 10-fold cross validation ended with an AUC of 0. An area under the curve of 0 means that the model is not able to predict new observations at all. There are no signs of overfitting since there is no fit at all. 
 
 ### Non-Parametric Classifier
 
 ```{R}
 library(caret)
 # non-parametric classifier code here
+pfit <- knn3(data1$`Order Net Total Above Avg`~ data1$`Order Quantity` + data1$`Order Subtotal` + data1$`Order Tax` + data1$`Order Net Total`, data=data1)
+kprob <- predict(pfit, newdata=data1)[,2]
+class_diag(kprob,data1$`Order Net Total Above Avg`, positive = "1")
+table(truth=data1$`Order Net Total Above Avg`, predictions = kprob>0.5)
 ```
+
+In this code, we integrate all numeric variables into the non-parametric classifier. The prediction output an AUC of 0.9991 which correlates to a close to perfect prediction based on the metrics I inputted. Next, I reported a confusion matrix. From the confusion matrix, we can calculate the TPR (true positive rate), Sensitivity, or the Recall. First, TP + FN is 61. This means 61 data points are actually in Category 0. Next, 60/61 equals 0.9836. This means that the True Positive Rate is 98% and therefore, the model accurately predicts the outcome 98% of the time. 
 
 ```{R}
 # cross-validation of np classifier here
+set.seed(322)
+k = 10
+data4 <- sample_frac(data1) #randomly order rows
+folds2 <- rep(1:k, length.out = nrow(data4)) #create folds
+diags <- NULL
+i = 1
+for (i in 1:k) {
+# create training and test sets
+train <- data4[folds != i, ]
+test <- data4[folds == i, ]
+truth <- data4$`Order Net Total Above Avg`
+# train model
+fit <- knn3(data4$`Order Net Total Above Avg`== "1" ~ data4$`Order Quantity` + data4$`Order Subtotal` + data4$`Order Tax` + data4$`Order Net Total`, data=train,
+)
+# test model
+probs2 <- predict(fit, newdata = test)[,2]
+# get performance metrics for each fold
+diags <- rbind(diags, class_diag(probs2, truth, positive = "1"))
+}
+# average performance metrics across all folds
+summarize_all(diags, mean)
 ```
 
-Discussion
+The 10-fold cross validation ended with an AUC of 0.9991. An area under the curve of 0.9991 means that the model is  able to predict new observations with 99.91% accuracy. Since the AUC stayed the same even after cross validation, there is no overfitting. Since the np classifier has a higher AUC than the linear classifier, it is a better prediction model. Finally, the true negative rate was 0.9885. The true positive rate was 1. This means that the np classifier is able to predict the binomial output based on the other numeric variables 99.9% of the time. This is am amazing prediction model. 
 
 
 ### Regression/Numeric Prediction
 
 ```{R}
 # regression model code here
+regfit <- lm(`Order Net Total` ~ `Order Subtotal` + `Order Tax`, data = AMZM_orders)
+yhat2 <- predict(regfit)
+mean((AMZM_orders$`Order Net Total` - yhat2)^2)
 ```
 
 ```{R}
 # cross-validation of regression model here
+set.seed(322)
+k = 10
+regdata <- AMZM_orders[sample(nrow(AMZM_orders)), ]
+regfolds <- cut(seq(1:nrow(AMZM_orders)), breaks = k, labels = F)
+
+diags <- NULL
+for (i in 1:k) {
+    regtrain <- regdata[folds != i, ]
+    regtest <- regdata[folds == i, ]
+    
+    regfit <- lm(`Order Net Total` ~ `Order Subtotal` + `Order Tax`, data = AMZM_orders)
+    regyhat <- predict(regfit, newdata = regtest)
+    
+    diags <- mean((regtest$`Order Net Total` - regyhat)^2)
+}
+mean(diags)
 ```
 
-Discussion
+
+After the linear regression model was made, it was used to predict the order net total from the order subtotal and order tax. As you can see above, the mean squared error was calculated to be 18.82 which is fairly low. This is the MSE for the overall dataset. Next, a 10 fold CV was performed. The cross validation resulted in a MSE of 0.631. Finally, since the MSE value significantly decreased after cross-validation, there is no overfitting. 
+
+
 
 ### Python 
 
 ```{R}
 library(reticulate)
+use_python("/usr/bin/python3")
+val <- "Arpan"
 ```
 
 ```{python}
 # python code here
+val = "Patel"
+print(r.val, val)
+
 ```
 
-Discussion
+
+```{R}
+cat(c(val, py$val))
+```
+This was a simple use of python where the object "val" was stored as something in R and something different in python. And then the following code prints both the r version and the python version side by side. The final result is my name: Arpan Patel. 
 
 ### Concluding Remarks
 
-Include concluding remarks here, if any
+Thank you for the wonderful semester. Although I have never touched a coding language in my whole educational career, I truly enjoyed this class and hope to apply at least some of the skills I learned in the medical field. Have a wonderful Christmas break. 
 
 
 
