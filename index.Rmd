@@ -165,14 +165,14 @@ family = "binomial")
 # test model
 probs <- predict(fit, newdata = test, type = "response")
 # get performance metrics for each fold
-diags <- rbind(diags, class_diag(probs, truth, positive = "True"))
+diags <- rbind(diags, class_diag(probs, truth, positive = "1"))
 }
 # average performance metrics across all folds
 summarize_all(diags, mean)
 
 ```
 
-The 10-fold cross validation ended with an AUC of 0. An area under the curve of 0 means that the model is not able to predict new observations at all. There are no signs of overfitting since there is no fit at all. 
+The 10-fold cross validation ended with an AUC of 0.7473. An area under the curve of 0.7473 means that the model is able to predict new observations around 74% of the time. Since the AUC decreased from 1 to 0.7473, there are no signs of overfitting.  
 
 ### Non-Parametric Classifier
 
